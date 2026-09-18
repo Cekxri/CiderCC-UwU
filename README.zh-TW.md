@@ -81,6 +81,8 @@ curl http://127.0.0.1:3050/v1/chat/completions \
 | `CC_USE_PROVIDER_MODELS` | `useProviderModels` | 設 `false` 用內建清單 |
 | `CC_STREAM_IDLE_MS` | 串流閒置看門狗 | 預設 `30000`；推理模型請調大 |
 | `CC_NONSTREAM_IDLE_MS` | 非串流閒置看門狗 | 預設 `90000` |
+| `CC_SESSION_TTL_MS` | 上游 session 存活時間 | 預設 `43200000`（12 小時）；零位元組斷流時代理會提前換一條，所以這只是上限 |
+| `CC_SESSION_JITTER_MS` | session 額外隨機壽命 | 預設 `3600000`（最多再多 1 小時） |
 | `CC_MAX_BODY_MB` | 請求體上限 | 預設 `100`（MB） |
 | `CC_MAX_INFLIGHT` | 單進程併發上限 | 預設 `0`（不限） |
 | `CMD_ZDR` | `zdr` | 設 `1` 要求 ZDR |

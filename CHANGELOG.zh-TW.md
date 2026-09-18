@@ -8,6 +8,17 @@
 
 ### 修正
 
+- **零位元組斷流不再黏在同一條上游 session 上。** 上游接受請求後什麼都沒送就把串流關掉時，以前每一次重試都沿用
+  同一條 session；那條 session 一旦在上游那邊壞掉，這一輪會失敗、下一輪也繼續失敗，只能等 12 小時自然汰換。
+  現在只要遇到零位元組斷流，代理就會先換一條全新的 session 再重試，而且會記住這次更換（連客戶端自己釘住的
+  session id／`prompt_cache_key` 也涵蓋），重試日誌會出現 `rotatedSession`。`CC_SESSION_TTL_MS` 與
+  `CC_SESSION_JITTER_MS` 也可以讓你直接調短平常的 session 壽命。
+- **串流中途閒置逾時，錯誤真的送得到了。** 逾時路徑以前先寫 SSE `error` 事件、下一秒就 `res.destroy()`，
+  事件一起被丟掉——使用者只看到串流忽然停住、沒有任何原因（curl 會說
+  `transfer closed with outstanding read data remaining`、錯誤事件 0 筆）。現在三個串流端點都會正常收尾，
+  原因送得到客戶端。用「送出第一個 delta 後就沉默」的假上游驗證過。
+- **閒置的 keep-alive 連線不再 5 秒就被關。** Node 預設 `keepAliveTimeout` 是 5 秒；桌面客戶端重用連線池時
+  可能撞上「連線剛好被關」的競態，而 POST 不會自動重試。現在閒置連線保留 65 秒（headers 70 秒），避開這個窗口。
 - **串流失敗改用 SSE 回報，不再回 JSON。** 串流請求遇到上游錯誤（403、零輸出、閒置逾時、連線中斷）時，以前回的是
   一般 JSON，客戶端只能顯示含糊的 `stream closed before response.completed`，真正原因被藏住。現在這些路徑會送 SSE
   的 `error` 事件並帶上上游自己的訊息；日誌也會記下上游回應內容，`CC API error` 終於能看出**為什麼**（例如 403 背後

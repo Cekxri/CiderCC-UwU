@@ -224,10 +224,42 @@ function log(level, msg, data) {
 // ── Session management / Session 管理 ───────────────
 // One session per API key, expiring after 12h plus up to 1h of random jitter
 // The same key reuses its session within a cycle and gets a fresh one when it lapses
-const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;    // 12h
-const SESSION_JITTER_MS  = 60 * 60 * 1000;           // up to 1h of jitter
+const SESSION_DURATION_MS = (() => {
+  const n = Number.parseInt(process.env.CC_SESSION_TTL_MS ?? '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 12 * 60 * 60 * 1000;   // 12h default
+})();
+const SESSION_JITTER_MS = (() => {
+  const n = Number.parseInt(process.env.CC_SESSION_JITTER_MS ?? '', 10);
+  return Number.isFinite(n) && n >= 0 ? n : 60 * 60 * 1000;       // up to 1h of jitter
+})();
 
 const sessionStore = new Map(); // apiKey → { sessionId, expiresAt }
+
+// Rotated stand-ins for sessions the client pinned itself (a session-ish header or prompt_cache_key):
+// the client keeps its pin, but the upstream sees the replacement.
+// 繁中：客戶端自己釘住 session id 時，換新只能靠這張覆蓋表記住「這個 pin 之後改用哪一條」。
+const sessionRotations = new Map(); // `${apiKey}\u0000${pin}` → { sessionId, expiresAt }
+
+function mintSessionEntry() {
+  const jitter = SESSION_JITTER_MS > 0 ? Math.floor(Math.random() * SESSION_JITTER_MS) : 0;
+  return { sessionId: randomUUID(), expiresAt: Date.now() + SESSION_DURATION_MS + jitter };
+}
+
+function sessionPin(incomingHeaders, promptCacheKey) {
+  // Prefer the session-ish headers sent by the client
+  const candidates = [
+    incomingHeaders && incomingHeaders['x-session-id'],
+    incomingHeaders && incomingHeaders['x-claude-code-session-id'],
+    incomingHeaders && incomingHeaders['session_id'],
+    promptCacheKey,
+  ];
+  for (const id of candidates) {
+    if (id && typeof id === 'string' && id.length >= 8) return id;
+  }
+  return null;
+}
+
+function rotationKey(apiKey, pin) { return apiKey + '\u0000' + pin; }
 
 function ensureSession(apiKey) {
   const now = Date.now();
@@ -238,11 +270,21 @@ function ensureSession(apiKey) {
   }
 
   // Expired, or the first time: mint a new session
-  const jitter = Math.floor(Math.random() * SESSION_JITTER_MS);
-  const sessionId = randomUUID();
-  sessionStore.set(apiKey, { sessionId, expiresAt: now + SESSION_DURATION_MS + jitter });
-      log('info', 'Session created', { sessionId: sessionId.slice(0, 8), storeSize: sessionStore.size });
-  return sessionId;
+  const fresh = mintSessionEntry();
+  sessionStore.set(apiKey, fresh);
+      log('info', 'Session created', { sessionId: fresh.sessionId.slice(0, 8), storeSize: sessionStore.size });
+  return fresh.sessionId;
+}
+
+// 繁中：上游在「還沒送出任何東西」就切斷串流時，問題可能就出在 session 本身（上游那邊壞掉的那一條）。
+// English: when the upstream cuts a stream before sending anything, the session itself may be the broken part —
+// rotate to a fresh one so the retry, and the rest of the conversation, stop hitting the dead session.
+function rotateSession(apiKey, incomingHeaders, promptCacheKey) {
+  const fresh = mintSessionEntry();
+  const pin = sessionPin(incomingHeaders || {}, promptCacheKey);
+  if (pin) sessionRotations.set(rotationKey(apiKey, pin), fresh);
+  else sessionStore.set(apiKey, fresh);
+  return fresh;
 }
 
 // Periodically sweep expired sessions and key state so the Maps cannot grow without bound
@@ -256,19 +298,19 @@ setInterval(() => {
       cleaned++;
     }
   }
+  for (const [key, entry] of sessionRotations) {
+    if (now >= entry.expiresAt) sessionRotations.delete(key);
+  }
   if (cleaned > 0) log('info', 'Session cleanup', { cleaned, remaining: sessionStore.size });
 }, 60 * 60 * 1000); // hourly
 
 function getSessionId(incomingHeaders, apiKey, promptCacheKey) {
-  // Prefer the session-ish headers sent by the client
-  const candidates = [
-    incomingHeaders['x-session-id'],
-    incomingHeaders['x-claude-code-session-id'],
-    incomingHeaders['session_id'],
-    promptCacheKey,
-  ];
-  for (const id of candidates) {
-    if (id && typeof id === 'string' && id.length >= 8) return id;
+  const pin = sessionPin(incomingHeaders, promptCacheKey);
+  if (pin) {
+    // A pin the relay rotated away from is answered with its replacement for as long as it lives
+    const rotated = sessionRotations.get(rotationKey(apiKey, pin));
+    if (rotated && Date.now() < rotated.expiresAt) return rotated.sessionId;
+    return pin;
   }
   // One session per API key
   return ensureSession(apiKey);
@@ -1243,8 +1285,10 @@ async function handleChatCompletions(req, res) {
             return;
           }
           if (!res.writableEnded) {
+            // 繁中：用 res.end() 收尾，剛寫入的錯誤事件才送得出去（destroy 會把它一起丟掉）。
+            // English: end the response so the error frame reaches the client — destroy would drop it.
             try { res.write(`data: ${JSON.stringify({ error: { message: timeoutMsg, type: 'rate_limit_error' }, retry_after: 5 })}\n\n`); } catch {}
-            try { res.destroy(); } catch {}
+            try { res.end(); } catch {}
           }
         } else {
           log('error', 'Stream error', { message: e.message });
@@ -2045,8 +2089,10 @@ async function handleMessages(req, res) {
             const timeoutMsg = consecutiveTimeouts >= TIMEOUT_REDUCE_CONTEXT_THRESHOLD
               ? 'Response timeout - try reducing context length (summarize earlier messages)'
               : 'Response timeout - request timed out';
+            // 繁中：用 res.end() 收尾，剛寫入的錯誤事件才送得出去（destroy 會把它一起丟掉）。
+            // English: end the response so the error frame reaches the client — destroy would drop it.
             try { res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: timeoutMsg }, retry_after: 5 })}\n\n`); } catch {}
-            try { res.destroy(); } catch {}
+            try { res.end(); } catch {}
           }
         } else {
           log('error', 'Anthropic stream error', { message: e.message });
@@ -3358,11 +3404,16 @@ async function handleResponses(req, res) {
             recoveryAttempts++;
             const partial = translator.text;
             const nothingYet = partial.length === 0 && translator.toolCallsEmitted === 0;
+            // 繁中：零位元組斷流代表這一條 session 可能已經死在上游；重試前先換一條新的，
+            // 這個對話之後也會沿用新 session，不必等到 12 小時的自然汰換。
+            // English: a zero-byte cut smells like a dead session — rotate to a fresh one before retrying,
+            // and remember the rotation so the rest of this conversation keeps off the dead session too.
+            const rotated = nothingYet ? rotateSession(apiKey, req.headers, promptCacheKey) : null;
             // 繁中：上游瞬間過載時立刻重試常常還是被切；先等一下再試，並記下請求大小方便比對。
             // English: an immediately repeated call often gets cut again while the upstream is busy — wait a
             // little, and record how big the request was so cut patterns can be compared later.
             if (recoveryAttempts > 1) await new Promise((r) => setTimeout(r, 900 * (recoveryAttempts - 1)));
-            log('warn', 'Upstream cut the stream — recovering', { attempt: recoveryAttempts, nothingYet, textChars: partial.length, inputItems: Array.isArray(respReq.input) ? respReq.input.length : 0 });
+            log('warn', 'Upstream cut the stream — recovering', { attempt: recoveryAttempts, nothingYet, textChars: partial.length, inputItems: Array.isArray(respReq.input) ? respReq.input.length : 0, rotatedSession: rotated ? rotated.sessionId.slice(0, 8) : false });
             const contMessages = convoMessages.slice();
             if (!nothingYet && partial) {
               contMessages.push({ role: 'assistant', content: partial });
@@ -3416,8 +3467,14 @@ async function handleResponses(req, res) {
             if (stream && sendResponsesStreamError(res, 429, 'rate_limit_error', timeoutMsg)) return;
             sendResponsesError(res, 429, 'rate_limit_error', timeoutMsg, 5); return; }
           if (!res.writableEnded) {
+            // 繁中：一定要用 res.end() 收尾；res.destroy() 會把剛寫入的錯誤事件一起丟掉，
+            // 客戶端只會看到「沒報錯就停住」。也順手取消上游讀取，不讓它繼續燒。
+            // English: end the response so the freshly written error event actually goes out — a res.destroy()
+            // here drops it and the stop looks silent. Cancel the upstream read as well.
+            try { reader.cancel(); } catch (e2) {}
+            try { abortController.abort(); } catch (e2) {}
             try { res.write(translator.errorEvent(timeoutMsg)); } catch (e2) {}
-            try { res.destroy(); } catch (e2) {}
+            try { res.end(); } catch (e2) {}
           }
         } else {
           log('error', 'Stream error', { message: e.message, path: '/v1/responses' });
@@ -3670,6 +3727,12 @@ process.on('unhandledRejection', (reason) => {
   }
 });
 
+// 繁中：Node 預設 keep-alive 閒置 5 秒就關連線；桌面客戶端重用連線池時偶爾會撞上「連線剛好被關」的
+// 競態，而 POST 不會自動重試，就變成一次無聲失敗。把閒置窗口拉長到 65 秒避開這個節奏。
+// English: Node closes idle keep-alive sockets after 5s by default; a desktop chat client reusing that socket
+// can race the close, and a POST is not retried automatically. Give idle sockets 65s instead.
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 70000;
 server.listen(CFG.port, CFG.host, () => {
   log('info', 'Cider CC UwU is open ~ pull up a stool :3', {
     webTools: 'web_search/web_fetch internal execution on',

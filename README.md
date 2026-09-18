@@ -86,6 +86,8 @@ Environment variables override the file, which is handy for Docker and for that 
 | `CC_USE_PROVIDER_MODELS` | `useProviderModels` | set to `false` to use the built-in list |
 | `CC_STREAM_IDLE_MS` | streaming idle watchdog | default `30000`; raise it for slow reasoning models |
 | `CC_NONSTREAM_IDLE_MS` | non-streaming idle watchdog | default `90000` |
+| `CC_SESSION_TTL_MS` | upstream session lifetime | default `43200000` (12h); an empty stream cut rotates the session early, so this is only the ceiling |
+| `CC_SESSION_JITTER_MS` | extra randomised session life | default `3600000` (up to 1h more) |
 | `CC_MAX_BODY_MB` | request body cap | default `100` (MB) |
 | `CC_MAX_INFLIGHT` | in-process concurrency cap | default `0` (unlimited) |
 | `CMD_ZDR` | `zdr` | set to `1` to request ZDR routing |

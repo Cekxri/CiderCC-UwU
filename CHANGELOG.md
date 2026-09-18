@@ -8,6 +8,21 @@ All the pours, in order. This project follows [Semantic Versioning](https://semv
 
 ### Fixed
 
+- **An empty stream cut no longer sticks to the same upstream session.** When the upstream accepted a request and
+  then closed the stream without sending anything, every retry reused the same session — once that session had
+  gone bad on the upstream side, the turn failed, the next turns failed too, and only the 12-hour session lapse
+  brought relief. The relay now rotates to a fresh session the first time an empty stream is cut, remembers the
+  rotation (including for conversations that pin their own session id or `prompt_cache_key`), and logs
+  `rotatedSession` on the retry. `CC_SESSION_TTL_MS` / `CC_SESSION_JITTER_MS` let you shorten the normal session
+  lifetime as well.
+- **A mid-stream idle timeout now reaches the client as a real error.** The timeout path wrote the SSE `error`
+  event and called `res.destroy()` in the same breath, which threw the event away — the client saw the stream
+  stop with no reason at all (`curl`: `transfer closed with outstanding read data remaining`, zero error
+  frames). All three streaming endpoints now end the response properly, so the reason arrives. Verified with a
+  mock upstream that goes silent right after the first delta.
+- **Idle keep-alive sockets are no longer closed after 5 seconds.** Node's default `keepAliveTimeout` is 5s; a
+  desktop client reusing a pooled connection can race that close, and a POST is not retried automatically. The
+  relay now keeps idle sockets for 65s (70s for headers) to stay clear of the race.
 - **Streaming failures are reported as SSE, not as a JSON body.** When a streaming request ran into an upstream error
   (a 403, a zero-output reply, an idle timeout, a dropped connection), the relay used to answer with plain JSON; the
   client could only report the generic `stream disconnected before completion: stream closed before response.completed`
