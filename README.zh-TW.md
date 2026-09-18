@@ -60,6 +60,8 @@ curl http://127.0.0.1:3050/v1/chat/completions \
 
 `config.json` —— 這間吧的小帳本：
 
+旁邊的 `config.local.json`（不進 repo）會疊在上面覆蓋，這台機器專用的設定就不用動到被追蹤的檔案。
+
 | 欄位 | 預設 | 說明 |
 |---|---|---|
 | `port` | `3000`（專案附 `3050`） | 監聽埠 |
@@ -73,6 +75,7 @@ curl http://127.0.0.1:3050/v1/chat/completions \
 | `modelRefreshIntervalMs` | `300000` | 模型清單快取時間（5 分鐘） |
 | `zdr` | `false` | 向上游要求零資料留存（ZDR）路由 |
 | `emptySystemPlaceholder` | `true` | 請求沒有 system prompt 時送一個空格，避免上游注入它自己 ~7.5K token 的預設提示詞（issue #17） |
+| `updateFeed` | `""` | 選用：一個會回傳本專案 `package.json` 的網址；上面的 `version` 比現行版本新時，視窗會印出更新提醒（不含連結與名稱）。放 `config.local.json` 最順手 |
 
 環境變數會覆蓋檔案設定，Docker 或特殊部署特別好用：
 
@@ -83,6 +86,8 @@ curl http://127.0.0.1:3050/v1/chat/completions \
 | `PROJECT_SLUG` | `projectSlug` | 只為相容而保留；送上上游的 slug 是刻意隨機化的 |
 | `LOG_FILE` | `logFile` | |
 | `CC_UI_LANG` | 視窗啟動器的介面語言 | `en-GB`（預設）或 `zh-TW`；正常會在首次啟動時選一次並記在 `ui-language.txt`。日誌檔一律英文（UK） |
+| `CC_COLOR` | 視窗彩色輸出 | 真正的終端機視窗預設開啟（灰底時間戳、柔紫 info、琥珀 warn、豔粉 error）；`0`（或 `NO_COLOR=1`）關掉、`1` 強制開啟。日誌檔與被重導的輸出永遠是純文字 |
+| `CC_UPDATE_FEED` | `updateFeed` | 同設定欄位的網址；想用環境變數時更方便 |
 | `CC_USE_PROVIDER_MODELS` | `useProviderModels` | 設 `false` 用內建清單 |
 | `CC_STREAM_IDLE_MS` | 串流閒置看門狗 | 預設 `30000`；推理模型請調大 |
 | `CC_NONSTREAM_IDLE_MS` | 非串流閒置看門狗 | 預設 `90000` |

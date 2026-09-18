@@ -34,6 +34,7 @@ function loadConfig() {
     modelRefreshIntervalMs: 5 * 60 * 1000,  // 5 minutes
     zdr: false,
     emptySystemPlaceholder: true, // send a space placeholder when there is no system prompt, so the upstream does not inject its ~7.5K-token default prompt (issue #17)
+    updateFeed: '', // optional URL serving this project's package.json; gives the window a nudge when a newer pour is out
   };
 
   const configPath = resolve(__dirname, 'config.json');
@@ -46,6 +47,18 @@ function loadConfig() {
     }
   }
 
+  // Local, git-ignored overrides live in config.local.json — the place for things this machine should keep
+  // out of the repo (the update feed, for instance).
+  // 繁中：config.local.json 是「這台機器專用」的覆蓋檔（已列在 .gitignore），用來放不想進 repo 的設定。
+  const localPath = resolve(__dirname, 'config.local.json');
+  if (existsSync(localPath)) {
+    try {
+      Object.assign(defaults, JSON.parse(readFileSync(localPath, 'utf-8')));
+    } catch (e) {
+      console.error('[config] Failed to parse config.local.json:', e.message);
+    }
+  }
+
   // Environment-variable overrides
   if (process.env.PORT) defaults.port = parseInt(process.env.PORT);
   if (process.env.HOST) defaults.host = process.env.HOST;
@@ -55,6 +68,7 @@ function loadConfig() {
   if (process.env.CC_USE_PROVIDER_MODELS) defaults.useProviderModels = process.env.CC_USE_PROVIDER_MODELS !== 'false';
   if (process.env.CMD_ZDR !== undefined) defaults.zdr = process.env.CMD_ZDR === '1';
   if (process.env.CC_EMPTY_SYSTEM_PLACEHOLDER) defaults.emptySystemPlaceholder = process.env.CC_EMPTY_SYSTEM_PLACEHOLDER !== 'false';
+  if (process.env.CC_UPDATE_FEED) defaults.updateFeed = process.env.CC_UPDATE_FEED;
 
   return defaults;
 }
@@ -263,10 +277,35 @@ const TIMEOUT_REDUCE_CONTEXT_THRESHOLD = 3;
 const LOG_LEVEL_ORDER = { error: 0, warn: 1, info: 2, debug: 3 };
 const LOG_LEVEL_FLOOR = LOG_LEVEL_ORDER[String(CFG.logLevel || 'info').toLowerCase()] ?? LOG_LEVEL_ORDER.info;
 
+// ── Console colours / 視窗配色 ───────────────────────
+// A Nordic-bar paint job for the window: muted grey stamp, soft-violet info, amber warnings and a
+// hot-pink error badge, with the message in soft pink and the JSON extra dimmed. Only a real terminal
+// gets the codes — redirected output (the log file, the background launcher) stays plain text, so
+// nothing ever greps an escape sequence again. `CC_COLOR=0` or `NO_COLOR=1` switches them off.
+// 繁中：北歐酒吧風配色只上在「真正的視窗」；被重導的輸出（日誌檔、背景版）永遠純文字。
+// Precedence: CC_COLOR=0 (off) > CC_COLOR=1 (on) > NO_COLOR (off) > a real terminal (on).
+const USE_COLOUR = process.env.CC_COLOR === '1'
+  ? true
+  : (process.env.CC_COLOR === '0' ? false : (Boolean(process.stdout.isTTY) && !process.env.NO_COLOR));
+const ANSI_PAINT = {
+  reset: '\u001b[0m',
+  stamp: '\u001b[38;5;244m',     // muted grey — the small print
+  message: '\u001b[38;5;218m',   // soft pink — the words that matter
+  data: '\u001b[38;5;245m',      // dim grey — the JSON tail
+  info: '\u001b[38;5;141m',      // soft violet
+};
+const LEVEL_PAINT = {
+  debug: '\u001b[38;5;245m',     // grey
+  info: ANSI_PAINT.info,
+  warn: '\u001b[38;5;214m',      // amber
+  error: '\u001b[38;5;197m',     // hot pink
+};
+
 // Console-only translations for the window language. The log file and the English console keep the
 // original strings, so anything grepping the log file never has to know about this table.
 // 繁中：這張表只給「視窗」用；日誌檔與英文模式都維持原文，抓日誌的工具完全不受影響。
 const LOG_TEXT_ZH_TW = {
+  'A newer version is available': '有新版本可以更新',
   'Aborted request cleaned up': '已中止的請求已清理',
   'Answer truncated by max_output_tokens': '回應被 max_output_tokens 截斷',
   'Anthropic stream error': 'Anthropic 串流錯誤',
@@ -316,23 +355,72 @@ const LOG_TEXT_ZH_TW = {
   'Tool output truncated': '工具輸出已截斷',
   'Unhandled rejection': '未處理的 Promise 拒絕',
   'Unknown CC event type': '未知的 CC 事件類型',
+  'Update check failed': '更新檢查失敗',
   'Upstream cut the stream — recovering': '上游切斷串流 — 正在恢復',
   'Upstream error': '上游錯誤',
   'Upstream fetch failed — retrying': '上游連線失敗 — 正在重試',
   'Upstream stream ended without finish': '上游串流在沒有 finish 的情況下結束',
   'Upstream stream finished': '上游串流完成',
+  'Up to date, nothing to pour': '已是最新版本，沒什麼好倒的 :3',
 };
 
 function log(level, msg, data) {
   if ((LOG_LEVEL_ORDER[level] ?? LOG_LEVEL_ORDER.info) > LOG_LEVEL_FLOOR) return;
-  const stamp = `[${new Date().toISOString()}] [${level}]`;
+  const stamp = `[${new Date().toISOString()}]`;
+  const badge = `[${level}]`;
   const tail = data ? ' ' + JSON.stringify(data) : '';
   // 繁中：視窗照選定語言顯示；日誌檔固定英文（UK）。
   // English: the window follows the chosen language; the log file always stays English (UK).
   const shown = UI_LANG === 'zh-TW' ? (LOG_TEXT_ZH_TW[msg] || msg) : msg;
-  console.log(`${stamp} ${shown}${tail}`);
+  if (USE_COLOUR) {
+    const levelPaint = LEVEL_PAINT[level] || ANSI_PAINT.info;
+    console.log(`${ANSI_PAINT.stamp}${stamp}${ANSI_PAINT.reset} ${levelPaint}${badge}${ANSI_PAINT.reset} ${ANSI_PAINT.message}${shown}${ANSI_PAINT.reset}${ANSI_PAINT.data}${tail}${ANSI_PAINT.reset}`);
+  } else {
+    console.log(`${stamp} ${badge} ${shown}${tail}`);
+  }
   if (CFG.logFile) {
-    try { appendFileSync(CFG.logFile, `${stamp} ${msg}${tail}\n`, 'utf-8'); } catch {}
+    try { appendFileSync(CFG.logFile, `${stamp} ${badge} ${msg}${tail}\n`, 'utf-8'); } catch {}
+  }
+}
+
+// ── Update check / 更新檢查 ─────────────────────────
+// Optional. Point `updateFeed` (config.local.json is the tidy place; `CC_UPDATE_FEED` also works) at a URL
+// that serves this project's package.json — or any JSON with a "version" field. When the feed is newer than
+// the copy running here, the window gets a friendly nudge. The message deliberately carries no links and no
+// project names: just the two version numbers.
+// 繁中：選用功能。把 updateFeed（建議放 config.local.json，或用 CC_UPDATE_FEED）指到一個會回傳本專案
+// package.json 的網址；遠端版本較新時只在視窗提示兩個版本號，不含任何連結或專案名稱。
+const UPDATE_FEED = String(CFG.updateFeed || '').trim();
+
+function compareVersions(a, b) {
+  const pa = String(a).split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+async function checkForUpdate() {
+  if (!UPDATE_FEED) return;
+  try {
+    const localVersion = String(JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8')).version || '0.0.0');
+    const res = await fetch(UPDATE_FEED, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) { log('debug', 'Update check failed', { status: res.status }); return; }
+    const remoteVersion = String((JSON.parse(await res.text()) || {}).version || '').trim();
+    if (!remoteVersion) { log('debug', 'Update check failed', { reason: 'feed has no version field' }); return; }
+    if (compareVersions(remoteVersion, localVersion) > 0) {
+      log('warn', 'A newer version is available', {
+        running: localVersion,
+        available: remoteVersion,
+        hint: 'a fresher pour is on the shelf — update when convenient :3',
+      });
+    } else {
+      log('debug', 'Up to date, nothing to pour', { version: localVersion });
+    }
+  } catch (e) {
+    log('debug', 'Update check failed', { message: e.message });
   }
 }
 
@@ -3880,4 +3968,6 @@ server.listen(CFG.port, CFG.host, () => {
   if (!CFG.apiKey) {
     log('info', 'No API key in config. API key must be sent in Authorization: Bearer <key> header per request.');
   }
+  // Fire-and-forget: a slow or unreachable feed never delays the bar opening. :3
+  void checkForUpdate();
 });

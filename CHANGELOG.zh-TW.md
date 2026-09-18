@@ -6,8 +6,16 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-19
+
 ### 新增
 
+- **版本舊了會提醒你。** 把 `updateFeed`（最適合放進不進 repo 的 `config.local.json`；`CC_UPDATE_FEED` 也可以）
+  指到一個會回傳本專案 `package.json` 的網址；如果上面的 `version` 比這裡跑的新，視窗就會印出兩個版本號並建議更新。
+  提示刻意不含任何連結、也不會出現專案名稱。
+- **視窗的酒吧燈亮了。** 在真正的終端機視窗裡，輸出現在有配色——時間戳灰、`info` 柔紫、`warn` 琥珀、
+  `error` 豔粉，訊息本文柔粉、JSON 尾巴壓暗——長長的日誌一眼就好讀。日誌檔與任何被重導的輸出都維持純文字
+  （永遠不會有 ANSI 逃脫碼被寫進檔案）；`CC_COLOR=0` 或 `NO_COLOR=1` 可以關掉顏色。
 - **視窗第一次啟動時會問語言。** 第一次用視窗版跑 `scripts\start.cmd`，會讓你選 English (UK) 或 繁體中文（台灣）；
   答案記在 `config.json` 旁邊的 `ui-language.txt`，之後啟動就不再問。這個選擇只影響「視窗印出的內容」——
   日誌檔一律保持英文（UK）；背景版 `scripts\start-background.cmd` 沒有視窗，所以全程英文（UK）。

@@ -1,6 +1,6 @@
 {
   "name": "cidercc-uwu",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "A chill little relay that turns the Command Code API into OpenAI / Anthropic compatible endpoints ~ UwU",
   "license": "MIT",

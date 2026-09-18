@@ -6,8 +6,18 @@ All the pours, in order. This project follows [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-19
+
 ### Added
 
+- **A nudge when your copy goes stale.** Point `updateFeed` — tidiest in the git-ignored `config.local.json`,
+  `CC_UPDATE_FEED` works too — at a URL that serves this project's `package.json`. If the feed's `version` is
+  newer than the one running here, the window prints the two version numbers and suggests updating. The nudge
+  deliberately carries no links and no project names.
+- **The window got its bar lights on.** Console output is now colour-coded in a real terminal — a muted grey
+  timestamp, a soft-violet `info` badge, amber `warn`, hot-pink `error`, the message in soft pink and the JSON
+  tail dimmed — so a long log is readable at a glance. Log files and any redirected output stay plain text (no
+  escape codes ever land on disk); `CC_COLOR=0` or `NO_COLOR=1` turns the colours off.
 - **The window asks for its language on first launch.** The first windowed run of `scripts/start.cmd` offers
   English (UK) or 繁體中文（台灣）; the answer is remembered in `ui-language.txt` next to `config.json` and later
   launches skip the question. The choice only affects what the window prints — the log file always stays
