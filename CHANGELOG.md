@@ -10,10 +10,11 @@ All the pours, in order. This project follows [Semantic Versioning](https://semv
 
 ### Added
 
-- **A nudge when your copy goes stale.** Point `updateFeed` — tidiest in the git-ignored `config.local.json`,
-  `CC_UPDATE_FEED` works too — at a URL that serves this project's `package.json`. If the feed's `version` is
-  newer than the one running here, the window prints the two version numbers and suggests updating. The nudge
-  deliberately carries no links and no project names.
+- **A nudge when your copy goes stale.** `config.json` ships an `updateFeed` pointed at this project's own
+  `package.json`, so every copy checks at startup. If the feed's `version` is newer than the one running here,
+  the window prints the two version numbers and suggests updating — never a link, never a project name.
+  Override it (or blank it to switch the check off) in the git-ignored `config.local.json`, or via
+  `CC_UPDATE_FEED`.
 - **The window got its bar lights on.** Console output is now colour-coded in a real terminal — violet leads:
   a deep-purple timestamp, and two shades per level (bright/light violet for `info`, apricot/peach for `warn`,
   warm coral/pink for `error`), with the JSON tail in a dusty warm rose so it recedes without going grey.

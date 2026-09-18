@@ -384,12 +384,12 @@ function log(level, msg, data) {
 }
 
 // ── Update check / 更新檢查 ─────────────────────────
-// Optional. Point `updateFeed` (config.local.json is the tidy place; `CC_UPDATE_FEED` also works) at a URL
-// that serves this project's package.json — or any JSON with a "version" field. When the feed is newer than
-// the copy running here, the window gets a friendly nudge. The message deliberately carries no links and no
-// project names: just the two version numbers.
-// 繁中：選用功能。把 updateFeed（建議放 config.local.json，或用 CC_UPDATE_FEED）指到一個會回傳本專案
-// package.json 的網址；遠端版本較新時只在視窗提示兩個版本號，不含任何連結或專案名稱。
+// `config.json` ships an `updateFeed` URL that serves this project's package.json — or any JSON with a
+// "version" field. `config.local.json` overrides it (blank it to switch the check off) and CC_UPDATE_FEED
+// works too. When the feed is newer than the copy running here, the window gets a friendly nudge; the
+// message deliberately carries no links and no project names, just the two version numbers.
+// 繁中：config.json 預設就帶一個 updateFeed 網址（指向本專案的 package.json）；config.local.json 可覆蓋
+// （設空字串即關閉），CC_UPDATE_FEED 也可以。遠端版本較新時只在視窗提示版本號，不含任何連結或專案名稱。
 const UPDATE_FEED = String(CFG.updateFeed || '').trim();
 
 function compareVersions(a, b) {

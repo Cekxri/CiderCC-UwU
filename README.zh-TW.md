@@ -75,7 +75,7 @@ curl http://127.0.0.1:3050/v1/chat/completions \
 | `modelRefreshIntervalMs` | `300000` | 模型清單快取時間（5 分鐘） |
 | `zdr` | `false` | 向上游要求零資料留存（ZDR）路由 |
 | `emptySystemPlaceholder` | `true` | 請求沒有 system prompt 時送一個空格，避免上游注入它自己 ~7.5K token 的預設提示詞（issue #17） |
-| `updateFeed` | `""` | 選用：一個會回傳本專案 `package.json` 的網址；上面的 `version` 比現行版本新時，視窗會印出更新提醒（不含連結與名稱）。放 `config.local.json` 最順手 |
+| `updateFeed` | 本專案 `package.json` 的網址 | 預設就指向本專案 main 分支上的 `package.json`，所以每份下載都會在啟動時檢查。上面的 `version` 比現行版本新時，視窗只印兩個版本號——不會出現連結、也不會出現專案名稱。想換來源或關掉（設空字串），放 `config.local.json` 最順手 |
 
 環境變數會覆蓋檔案設定，Docker 或特殊部署特別好用：
 

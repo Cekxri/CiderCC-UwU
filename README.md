@@ -82,7 +82,7 @@ have to touch the tracked file.
 | `modelRefreshIntervalMs` | `300000` | Model-list cache lifetime (5 minutes) |
 | `zdr` | `false` | Ask upstream for zero-data-retention routing |
 | `emptySystemPlaceholder` | `true` | Send a single space when a request has no system prompt, so the upstream does not inject its ~7.5K-token default prompt (issue #17) |
-| `updateFeed` | `""` | Optional URL serving this project's `package.json`; when its `version` is newer than the running one, the window prints an update nudge (no links, no names). Handiest in `config.local.json` |
+| `updateFeed` | this project's `package.json` URL | Ships pointed at the project's own `package.json` on the main branch, so every copy checks at startup. When the feed's `version` is newer than the running one, the window prints the two version numbers — never a link, never a project name. Point it elsewhere, or blank it (handiest in `config.local.json`), to change that |
 
 Environment variables override the file, which is handy for Docker and for that one weird deployment:
 
