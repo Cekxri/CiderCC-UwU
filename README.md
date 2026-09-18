@@ -57,6 +57,11 @@ runs it quietly in the background (logs in `logs/`), and `scripts/stop.cmd` shut
 honour `PROXY_PORT` (default 3050): `set PROXY_PORT=13050` before starting moves the foreground,
 background and stop scripts together.
 
+The very first windowed launch asks which language the window should speak — English (UK) or
+繁體中文（台灣）— and remembers the answer in `ui-language.txt` so it only ever asks once. The choice
+only changes what the window prints: the log file always stays English (UK), and the background launcher
+(no window) stays English (UK) as well. Delete `ui-language.txt` to be asked again.
+
 ## Configuration
 
 `config.json` — the relay's little black book:
@@ -83,6 +88,7 @@ Environment variables override the file, which is handy for Docker and for that 
 | `CC_API_BASE` | `apiBase` | |
 | `PROJECT_SLUG` | `projectSlug` | Accepted for compatibility; the slug sent upstream is randomised by design |
 | `LOG_FILE` | `logFile` | |
+| `CC_UI_LANG` | console language for the windowed launcher | `en-GB` (default) or `zh-TW`; normally picked once on first launch and remembered in `ui-language.txt`. The log file always stays English (UK) |
 | `CC_USE_PROVIDER_MODELS` | `useProviderModels` | set to `false` to use the built-in list |
 | `CC_STREAM_IDLE_MS` | streaming idle watchdog | default `30000`; raise it for slow reasoning models |
 | `CC_NONSTREAM_IDLE_MS` | non-streaming idle watchdog | default `90000` |

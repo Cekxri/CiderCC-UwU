@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **視窗第一次啟動時會問語言。** 第一次用視窗版跑 `scripts\start.cmd`，會讓你選 English (UK) 或 繁體中文（台灣）；
+  答案記在 `config.json` 旁邊的 `ui-language.txt`，之後啟動就不再問。這個選擇只影響「視窗印出的內容」——
+  日誌檔一律保持英文（UK）；背景版 `scripts\start-background.cmd` 沒有視窗，所以全程英文（UK）。
+  想覆蓋記憶的選擇可以用 `CC_UI_LANG`（`en-GB` / `zh-TW`）。
+
 ### 修正
 
 - **零位元組斷流不再黏在同一條上游 session 上。** 上游接受請求後什麼都沒送就把串流關掉時，以前每一次重試都沿用

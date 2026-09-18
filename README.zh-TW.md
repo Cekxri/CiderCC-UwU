@@ -52,6 +52,10 @@ curl http://127.0.0.1:3050/v1/chat/completions \
 （日誌放在 `logs/`）、`scripts/stop.cmd` 負責收攤。三個腳本都認 `PROXY_PORT`（預設 3050）：啟動前 `set PROXY_PORT=13050`，
 前景、背景與停止會一起換到別的埠。
 
+第一次用視窗版啟動時會問你視窗要說哪種語言——English (UK) 或 繁體中文（台灣）——答案記在
+`ui-language.txt`，之後就不再問。這個選擇只影響視窗印出的內容：日誌檔一律英文（UK），背景版（沒有視窗）
+也維持英文（UK）。想重新選，把 `ui-language.txt` 刪掉再開就好。
+
 ## 設定
 
 `config.json` —— 這間吧的小帳本：
@@ -78,6 +82,7 @@ curl http://127.0.0.1:3050/v1/chat/completions \
 | `CC_API_BASE` | `apiBase` | |
 | `PROJECT_SLUG` | `projectSlug` | 只為相容而保留；送上上游的 slug 是刻意隨機化的 |
 | `LOG_FILE` | `logFile` | |
+| `CC_UI_LANG` | 視窗啟動器的介面語言 | `en-GB`（預設）或 `zh-TW`；正常會在首次啟動時選一次並記在 `ui-language.txt`。日誌檔一律英文（UK） |
 | `CC_USE_PROVIDER_MODELS` | `useProviderModels` | 設 `false` 用內建清單 |
 | `CC_STREAM_IDLE_MS` | 串流閒置看門狗 | 預設 `30000`；推理模型請調大 |
 | `CC_NONSTREAM_IDLE_MS` | 非串流閒置看門狗 | 預設 `90000` |

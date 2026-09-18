@@ -11,6 +11,9 @@ if not exist "logs" mkdir "logs"
 set "CC_STREAM_IDLE_MS=300000"
 set "CC_NONSTREAM_IDLE_MS=300000"
 
+rem The background relay has no window to ask in, so it always speaks English (UK) — logs included. :3
+set "CC_UI_LANG=en-GB"
+
 rem PROXY_PORT moves the relay off 3050; scripts\stop.cmd reads the same variable. :3
 if defined PROXY_PORT set "PORT=%PROXY_PORT%"
 

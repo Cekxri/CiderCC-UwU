@@ -6,6 +6,14 @@ All the pours, in order. This project follows [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Added
+
+- **The window asks for its language on first launch.** The first windowed run of `scripts/start.cmd` offers
+  English (UK) or 繁體中文（台灣）; the answer is remembered in `ui-language.txt` next to `config.json` and later
+  launches skip the question. The choice only affects what the window prints — the log file always stays
+  English (UK), and `scripts/start-background.cmd` has no window, so it stays English (UK) throughout.
+  `CC_UI_LANG` (`en-GB` / `zh-TW`) overrides the remembered choice.
+
 ### Fixed
 
 - **An empty stream cut no longer sticks to the same upstream session.** When the upstream accepted a request and

@@ -6,6 +6,7 @@ logs/
 *.patch
 .env
 config.local.json
+ui-language.txt
 tools-debug.log
 .DS_Store
 Thumbs.db

@@ -14,9 +14,10 @@
 import http from 'http';
 import crypto from 'crypto';
 import { randomUUID } from 'crypto';
-import { readFileSync, existsSync, appendFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, appendFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { createInterface } from 'readline';
 
 // ── Configuration loading / 設定載入 ───────────────
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -59,6 +60,56 @@ function loadConfig() {
 }
 
 const CFG = loadConfig();
+
+// ── Console language / 視窗語言 ─────────────────────
+// Chosen once on the first windowed launch and remembered in ui-language.txt (next to config.json).
+// It only changes what the console shows — the log file always stays English (UK), and the background
+// launcher has no window, so it defaults to English (UK) as well.
+// 繁中：視窗語言在首次啟動時選擇，記在 config.json 旁的 ui-language.txt；只影響「視窗印出」的內容，
+// 日誌檔一律英文（UK）；背景版沒有視窗，預設也是英文（UK）。
+const UI_LANGUAGE_FILE = resolve(__dirname, 'ui-language.txt');
+
+function normaliseUiLanguage(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'zh-tw' || v === 'zh_tw' || v === 'zh-hant' || v === 'zh') return 'zh-TW';
+  if (v === 'en-gb' || v === 'en_gb' || v === 'en' || v === 'english') return 'en-GB';
+  return null;
+}
+
+function readUiLanguageFile() {
+  try { return normaliseUiLanguage(readFileSync(UI_LANGUAGE_FILE, 'utf-8')); } catch { return null; }
+}
+
+function writeUiLanguageFile(value) {
+  try { writeFileSync(UI_LANGUAGE_FILE, value + '\n', 'utf-8'); } catch {}
+}
+
+function promptForUiLanguage() {
+  return new Promise((resolveChoice) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const ask = () => {
+      rl.question('Choose the window language / 選擇視窗語言：\n  [1] English (UK)\n  [2] 繁體中文（台灣）\n> ', (answer) => {
+        const a = String(answer).trim().toLowerCase();
+        if (a === '1' || a === 'en' || a === 'en-gb') { rl.close(); resolveChoice('en-GB'); return; }
+        if (a === '2' || a === 'zh' || a === 'zh-tw' || answer.trim() === '中文') { rl.close(); resolveChoice('zh-TW'); return; }
+        console.log('Please type 1 or 2. / 請輸入 1 或 2。');
+        ask();
+      });
+    };
+    ask();
+  });
+}
+
+const UI_LANG = await (async () => {
+  const fromEnv = normaliseUiLanguage(process.env.CC_UI_LANG);
+  if (fromEnv) return fromEnv;
+  const fromFile = readUiLanguageFile();
+  if (fromFile) return fromFile;
+  if (!process.stdin.isTTY) return 'en-GB';   // no window to ask in (background launcher, pipes)
+  const chosen = await promptForUiLanguage();
+  writeUiLanguageFile(chosen);
+  return chosen;
+})();
 
 // ── Fingerprint generation / 裝置指紋產生（首次自動建立）──
 // CPU model to core-count lookup (Windows x64 only)
@@ -212,12 +263,76 @@ const TIMEOUT_REDUCE_CONTEXT_THRESHOLD = 3;
 const LOG_LEVEL_ORDER = { error: 0, warn: 1, info: 2, debug: 3 };
 const LOG_LEVEL_FLOOR = LOG_LEVEL_ORDER[String(CFG.logLevel || 'info').toLowerCase()] ?? LOG_LEVEL_ORDER.info;
 
+// Console-only translations for the window language. The log file and the English console keep the
+// original strings, so anything grepping the log file never has to know about this table.
+// 繁中：這張表只給「視窗」用；日誌檔與英文模式都維持原文，抓日誌的工具完全不受影響。
+const LOG_TEXT_ZH_TW = {
+  'Aborted request cleaned up': '已中止的請求已清理',
+  'Answer truncated by max_output_tokens': '回應被 max_output_tokens 截斷',
+  'Anthropic stream error': 'Anthropic 串流錯誤',
+  'CC API error': 'CC API 錯誤',
+  'CC API error (Anthropic)': 'CC API 錯誤（Anthropic）',
+  'CC error (Anthropic non-stream)': 'CC 錯誤（Anthropic 非串流）',
+  'CC stream error': 'CC 串流錯誤',
+  'CC stream error (non-stream)': 'CC 串流錯誤（非串流）',
+  'CC stream error event': 'CC 串流錯誤事件',
+  'CC tool history': 'CC 工具歷史',
+  'CC Version fetch failed, using current': 'CC 版本查詢失敗，沿用目前版本',
+  'CC Version refreshed from npm': 'CC 版本已從 npm 更新',
+  'Cider CC UwU is open ~ pull up a stool :3': 'Cider CC UwU 開張啦～拉張高腳凳坐吧 :3',
+  'Client disconnected': '客戶端已斷線',
+  'Client drain timeout enabled': '客戶端讀取逾時保護已啟用',
+  'Client stalled on backpressure, dropping connection': '客戶端不再讀取（背壓卡住），切斷連線',
+  'Context limit exceeded by messages alone (cannot retry)': '單靠訊息就超過上下文上限（無法重試）',
+  'Context limit hit, retrying with reduced max_tokens': '撞到上下文上限，降低 max_tokens 重試',
+  'Executed internal web tools': '已執行內建網路工具',
+  'Executed internal web tools (non-stream)': '已執行內建網路工具（非串流）',
+  'Fetched models from Provider API': '已從 Provider API 取得模型清單',
+  'Fingerprint generated for key': '已為金鑰產生裝置指紋',
+  'Fingerprint record error': '裝置指紋記錄錯誤',
+  'Fingerprint record failed': '裝置指紋記錄失敗',
+  'Fingerprint recorded': '裝置指紋已記錄',
+  'Fingerprint/lifecycle next refresh': '裝置指紋／生命週期下次更新',
+  'Fingerprint/lifecycle refresh error, will retry next request': '裝置指紋／生命週期更新失敗，下次請求再試',
+  'In-flight limit reached, rejecting request': '達到在途請求上限，拒絕請求',
+  'Lifecycle event error': '生命週期事件錯誤',
+  'Lifecycle event failed': '生命週期事件失敗',
+  'Lifecycle event sent': '生命週期事件已送出',
+  'No API key in config. API key must be sent in Authorization: Bearer <key> header per request.': '設定檔沒有 API key；請在每個請求用 Authorization: Bearer <key> 標頭帶上',
+  'Provider models fetch error, using hardcoded list': 'Provider 模型清單取得錯誤，改用內建清單',
+  'Provider models fetch failed, using hardcoded list': 'Provider 模型清單取得失敗，改用內建清單',
+  'Rejected namespace tools (forcing flat-tool fallback)': '已拒絕 namespace 工具（強制改用扁平工具）',
+  'Repaired incomplete tool history': '已修補不完整的工具歷史',
+  'Request body limit implies high per-request worst-case memory': '請求體上限代表單一請求最壞記憶體用量偏高',
+  'Request cancelled (client disconnected before CC response)': '請求已取消（CC 回應前客戶端就斷線）',
+  'Responses handler error': 'Responses 處理器錯誤',
+  'Responses input items': 'Responses 輸入項目',
+  'Session cleanup': 'Session 清理',
+  'Session created': 'Session 已建立',
+  'Stream error': '串流錯誤',
+  'Stream idle timeout': '串流閒置逾時',
+  'Stream recovery failed': '串流恢復失敗',
+  'Tool entries (kept vs ignored)': '工具項目（保留 vs 忽略）',
+  'Tool output truncated': '工具輸出已截斷',
+  'Unhandled rejection': '未處理的 Promise 拒絕',
+  'Unknown CC event type': '未知的 CC 事件類型',
+  'Upstream cut the stream — recovering': '上游切斷串流 — 正在恢復',
+  'Upstream error': '上游錯誤',
+  'Upstream fetch failed — retrying': '上游連線失敗 — 正在重試',
+  'Upstream stream ended without finish': '上游串流在沒有 finish 的情況下結束',
+  'Upstream stream finished': '上游串流完成',
+};
+
 function log(level, msg, data) {
   if ((LOG_LEVEL_ORDER[level] ?? LOG_LEVEL_ORDER.info) > LOG_LEVEL_FLOOR) return;
-  const line = `[${new Date().toISOString()}] [${level}] ${msg}${data ? ' ' + JSON.stringify(data) : ''}`;
-  console.log(line);
+  const stamp = `[${new Date().toISOString()}] [${level}]`;
+  const tail = data ? ' ' + JSON.stringify(data) : '';
+  // 繁中：視窗照選定語言顯示；日誌檔固定英文（UK）。
+  // English: the window follows the chosen language; the log file always stays English (UK).
+  const shown = UI_LANG === 'zh-TW' ? (LOG_TEXT_ZH_TW[msg] || msg) : msg;
+  console.log(`${stamp} ${shown}${tail}`);
   if (CFG.logFile) {
-    try { appendFileSync(CFG.logFile, line + '\n', 'utf-8'); } catch {}
+    try { appendFileSync(CFG.logFile, `${stamp} ${msg}${tail}\n`, 'utf-8'); } catch {}
   }
 }
 

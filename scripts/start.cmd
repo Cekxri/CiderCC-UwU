@@ -1,4 +1,7 @@
 @echo off
+rem The window language is picked on first launch and remembered in ui-language.txt. :3
+rem UTF-8 console, so the Chinese option renders properly on any Windows locale. :3
+chcp 65001 >nul
 title Cider CC UwU :3
 cd /d "%~dp0.."
 
