@@ -93,7 +93,7 @@ Environment variables override the file, which is handy for Docker and for that 
 | `PROJECT_SLUG` | `projectSlug` | Accepted for compatibility; the slug sent upstream is randomised by design |
 | `LOG_FILE` | `logFile` | |
 | `CC_UI_LANG` | console language for the windowed launcher | `en-GB` (default) or `zh-TW`; normally picked once on first launch and remembered in `ui-language.txt`. The log file always stays English (UK) |
-| `CC_COLOR` | console colours for the window | on by default in a real terminal (muted grey stamp, soft-violet info, amber warnings, hot-pink errors); `0` (or `NO_COLOR=1`) switches them off, `1` forces them on. Log files and redirected output are always plain text |
+| `CC_COLOR` | console colours for the window | on by default in a real terminal — violet-led: deep-purple stamp, bright/light violet `info`, apricot/peach `warn`, warm coral `error`, dusty-rose JSON tail; `0` (or `NO_COLOR=1`) switches them off, `1` forces them on. Log files and redirected output are always plain text |
 | `CC_UPDATE_FEED` | `updateFeed` | same URL as the config field, for when an env var is easier |
 | `CC_USE_PROVIDER_MODELS` | `useProviderModels` | set to `false` to use the built-in list |
 | `CC_STREAM_IDLE_MS` | streaming idle watchdog | default `30000`; raise it for slow reasoning models |

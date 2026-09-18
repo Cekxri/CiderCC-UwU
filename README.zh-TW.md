@@ -86,7 +86,7 @@ curl http://127.0.0.1:3050/v1/chat/completions \
 | `PROJECT_SLUG` | `projectSlug` | 只為相容而保留；送上上游的 slug 是刻意隨機化的 |
 | `LOG_FILE` | `logFile` | |
 | `CC_UI_LANG` | 視窗啟動器的介面語言 | `en-GB`（預設）或 `zh-TW`；正常會在首次啟動時選一次並記在 `ui-language.txt`。日誌檔一律英文（UK） |
-| `CC_COLOR` | 視窗彩色輸出 | 真正的終端機視窗預設開啟（灰底時間戳、柔紫 info、琥珀 warn、豔粉 error）；`0`（或 `NO_COLOR=1`）關掉、`1` 強制開啟。日誌檔與被重導的輸出永遠是純文字 |
+| `CC_COLOR` | 視窗彩色輸出 | 真正的終端機視窗預設開啟，以紫為主：深紫時間戳、亮紫／淺紫 `info`、杏桃／蜜桃 `warn`、暖珊瑚 `error`、暖玫瑰 JSON 尾巴；`0`（或 `NO_COLOR=1`）關掉、`1` 強制開啟。日誌檔與被重導的輸出永遠是純文字 |
 | `CC_UPDATE_FEED` | `updateFeed` | 同設定欄位的網址；想用環境變數時更方便 |
 | `CC_USE_PROVIDER_MODELS` | `useProviderModels` | 設 `false` 用內建清單 |
 | `CC_STREAM_IDLE_MS` | 串流閒置看門狗 | 預設 `30000`；推理模型請調大 |

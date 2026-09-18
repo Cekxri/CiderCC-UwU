@@ -278,27 +278,27 @@ const LOG_LEVEL_ORDER = { error: 0, warn: 1, info: 2, debug: 3 };
 const LOG_LEVEL_FLOOR = LOG_LEVEL_ORDER[String(CFG.logLevel || 'info').toLowerCase()] ?? LOG_LEVEL_ORDER.info;
 
 // ── Console colours / 視窗配色 ───────────────────────
-// A Nordic-bar paint job for the window: muted grey stamp, soft-violet info, amber warnings and a
-// hot-pink error badge, with the message in soft pink and the JSON extra dimmed. Only a real terminal
-// gets the codes — redirected output (the log file, the background launcher) stays plain text, so
-// nothing ever greps an escape sequence again. `CC_COLOR=0` or `NO_COLOR=1` switches them off.
-// 繁中：北歐酒吧風配色只上在「真正的視窗」；被重導的輸出（日誌檔、背景版）永遠純文字。
+// A Nordic-bar paint job where violet calls the tune: a deep-purple timestamp, and every level gets two
+// shades — info in bright/light violet, warnings in apricot/peach, errors in warm coral/pink (peachy,
+// never cold), and the JSON tail in a dusty warm rose so it recedes without going grey. Only a real
+// terminal gets the codes — redirected output (the log file, the background launcher) stays plain text,
+// so nothing ever greps an escape sequence again. `CC_COLOR=0` or `NO_COLOR=1` switches them off.
+// 繁中：以紫為主的北歐酒吧配色——時間戳深紫，info 亮紫／淺紫，warn 杏桃／蜜桃，error 暖珊瑚／暖粉，
+// JSON 尾巴用暖玫瑰色壓暗（不再灰灰的）。只有「真正的視窗」上色；日誌檔與背景版永遠純文字。
 // Precedence: CC_COLOR=0 (off) > CC_COLOR=1 (on) > NO_COLOR (off) > a real terminal (on).
 const USE_COLOUR = process.env.CC_COLOR === '1'
   ? true
   : (process.env.CC_COLOR === '0' ? false : (Boolean(process.stdout.isTTY) && !process.env.NO_COLOR));
 const ANSI_PAINT = {
   reset: '\u001b[0m',
-  stamp: '\u001b[38;5;244m',     // muted grey — the small print
-  message: '\u001b[38;5;218m',   // soft pink — the words that matter
-  data: '\u001b[38;5;245m',      // dim grey — the JSON tail
-  info: '\u001b[38;5;141m',      // soft violet
+  stamp: '\u001b[38;5;97m',      // deep muted purple — the small print
+  data: '\u001b[38;5;181m',      // dusty warm rose — the JSON tail, warm but quiet
 };
 const LEVEL_PAINT = {
-  debug: '\u001b[38;5;245m',     // grey
-  info: ANSI_PAINT.info,
-  warn: '\u001b[38;5;214m',      // amber
-  error: '\u001b[38;5;197m',     // hot pink
+  debug: { badge: '\u001b[38;5;97m',  message: '\u001b[38;5;139m' }, // deep purple / muted mauve
+  info:  { badge: '\u001b[38;5;141m', message: '\u001b[38;5;183m' }, // bright violet / light violet
+  warn:  { badge: '\u001b[38;5;215m', message: '\u001b[38;5;223m' }, // apricot / peach
+  error: { badge: '\u001b[38;5;203m', message: '\u001b[38;5;210m' }, // warm coral / warm pink
 };
 
 // Console-only translations for the window language. The log file and the English console keep the
@@ -373,8 +373,8 @@ function log(level, msg, data) {
   // English: the window follows the chosen language; the log file always stays English (UK).
   const shown = UI_LANG === 'zh-TW' ? (LOG_TEXT_ZH_TW[msg] || msg) : msg;
   if (USE_COLOUR) {
-    const levelPaint = LEVEL_PAINT[level] || ANSI_PAINT.info;
-    console.log(`${ANSI_PAINT.stamp}${stamp}${ANSI_PAINT.reset} ${levelPaint}${badge}${ANSI_PAINT.reset} ${ANSI_PAINT.message}${shown}${ANSI_PAINT.reset}${ANSI_PAINT.data}${tail}${ANSI_PAINT.reset}`);
+    const paint = LEVEL_PAINT[level] || LEVEL_PAINT.info;
+    console.log(`${ANSI_PAINT.stamp}${stamp}${ANSI_PAINT.reset} ${paint.badge}${badge}${ANSI_PAINT.reset} ${paint.message}${shown}${ANSI_PAINT.reset}${ANSI_PAINT.data}${tail}${ANSI_PAINT.reset}`);
   } else {
     console.log(`${stamp} ${badge} ${shown}${tail}`);
   }
