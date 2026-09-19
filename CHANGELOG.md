@@ -6,6 +6,19 @@ All the pours, in order. This project follows [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-20
+
+### Fixed
+
+- **Sub-agent tasks reach the sub-agent now.** The multi-agent protocol ships inter-agent messages (a child's
+  `NEW_TASK`, a coordinator's `FINAL_ANSWER` coming back from a child) as `agent_message` items in the Responses
+  input. The relay did not know that item type and dropped it, so a freshly spawned sub-agent saw only its
+  environment and replied "I received no task content", while a coordinator never saw the child's report —
+  the flaky "agent spawned a sub-agent and it did nothing" pattern. `agent_message` items are now forwarded
+  exactly like a cross-thread delegation (native tool pair by default; a user message with
+  `CC_NATIVE_DELEGATION=0`). Unknown item types are also logged at debug level, so future protocol drift shows
+  up instead of vanishing silently.
+
 ## [1.1.0] - 2026-09-19
 
 ### Added

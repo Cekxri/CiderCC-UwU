@@ -333,6 +333,7 @@ const LOG_TEXT_ZH_TW = {
   'Fingerprint recorded': '裝置指紋已記錄',
   'Fingerprint/lifecycle next refresh': '裝置指紋／生命週期下次更新',
   'Fingerprint/lifecycle refresh error, will retry next request': '裝置指紋／生命週期更新失敗，下次請求再試',
+  'Ignored input item type': '已忽略未知的輸入項目類型',
   'In-flight limit reached, rejecting request': '達到在途請求上限，拒絕請求',
   'Lifecycle event error': '生命週期事件錯誤',
   'Lifecycle event failed': '生命週期事件失敗',
@@ -2929,7 +2930,37 @@ function convertResponsesToChat(respReq) {
           }
           break;
         }
-        default: break;
+        case 'agent_message': {
+          flushPending();
+          // 繁中：跨代理訊息（子代理收到的 NEW_TASK、總代理收到的 FINAL_ANSWER）是用 agent_message
+          // 進來的；不認得這個型別就會整筆被丟掉——子代理看不到任務、總代理看不到回報。這裡把它
+          // 當成一般的跨對話委派轉送（預設原生配對，CC_NATIVE_DELEGATION=0 退回使用者訊息）。
+          // English: inter-agent messages (a child's NEW_TASK, the coordinator's FINAL_ANSWER from a child)
+          // arrive as `agent_message` items; an unknown type is dropped silently, so the child never sees its
+          // task and the coordinator never sees the report. Forward them like any other cross-thread message.
+          const parts = Array.isArray(item.content) ? item.content : [];
+          const text = parts
+            .map((p) => (typeof p === 'string' ? p : (p.text || p.encrypted_content || '')))
+            .filter((s) => s && String(s).trim())
+            .join('\n');
+          if (text.trim()) {
+            const kind = (/Message Type:\s*([A-Z_]+)/.exec(text) || [])[1] || '';
+            if (NATIVE_DELEGATION) {
+              const toolName = kind === 'NEW_TASK' ? 'spawn_agent'
+                : (kind === 'FOLLOWUP_TASK' ? 'followup_task' : 'send_message_to_thread');
+              for (const m of delegationToToolPair(text, toolName)) messages.push(m);
+            } else {
+              messages.push({ role: 'user', content: delegationToUserMessage(text) });
+            }
+          }
+          break;
+        }
+        default: {
+          // 繁中：未知型別不再默默消失，debug 等級會記一筆，協定再變時才查得出來。
+          // English: unknown item types no longer vanish silently — a debug line keeps future drift findable.
+          if (item.type) log('debug', 'Ignored input item type', { type: item.type });
+          break;
+        }
       }
     }
   }
