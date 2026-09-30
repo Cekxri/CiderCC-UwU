@@ -349,6 +349,7 @@ const LOG_TEXT_ZH_TW = {
   'Responses input items': 'Responses 輸入項目',
   'Session cleanup': 'Session 清理',
   'Session created': 'Session 已建立',
+  'Skipped an incomplete image in tool output': '已略過工具輸出中不完整的圖片',
   'Stream error': '串流錯誤',
   'Stream idle timeout': '串流閒置逾時',
   'Stream recovery failed': '串流恢復失敗',
@@ -2562,14 +2563,52 @@ function debugToolsLog(entry) {
 // 繁中：工具輸出常含超長 base64（例如 view_image 的截圖）；當文字送出會被上游以文字 token 計價（實測 220 萬字 ≈ 153 萬 token）。這裡把 data URL 抽出改用圖片重送，並截斷超長輸出。
 const MAX_TOOL_OUTPUT_CHARS = (() => { const n = Number.parseInt(process.env.CC_MAX_TOOL_OUTPUT_CHARS ?? '', 10); return Number.isFinite(n) && n > 0 ? n : 100000; })();
 const DATA_URL_RE = /data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi;
+// 繁中：工具輸出被 App 截斷時，常常剛好切在 base64 中間；這種「半張圖」送上上游會被判成
+// unsupported image（502）。只有真的完整、而且上游支援的格式才當圖片重送，其餘留在文字裡。
+// English: the client regularly truncates long tool outputs mid-base64, and a half image makes the upstream
+// answer 502 "unsupported image". Only complete files in an upstream-supported format are re-sent as images.
+function isCompleteImageDataUrl(u) {
+  const m = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(String(u || ''));
+  if (!m) return false;
+  const type = m[1].toLowerCase();
+  const payload = m[2];
+  if (payload.length % 4 !== 0 || payload.length < 64) return false;
+  let buf;
+  try { buf = Buffer.from(payload, 'base64'); } catch (e) { return false; }
+  if (!buf || buf.length < 48) return false;
+  if (type === 'image/png') {
+    if (!(buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47)) return false;
+    return buf.subarray(Math.max(0, buf.length - 16)).toString('latin1').includes('IEND');
+  }
+  if (type === 'image/jpeg' || type === 'image/jpg') {
+    return buf[0] === 0xff && buf[1] === 0xd8 && buf[buf.length - 2] === 0xff && buf[buf.length - 1] === 0xd9;
+  }
+  if (type === 'image/gif') {
+    const head = buf.subarray(0, 6).toString('latin1');
+    return (head === 'GIF87a' || head === 'GIF89a') && buf[buf.length - 1] === 0x3b;
+  }
+  if (type === 'image/webp') {
+    if (buf.subarray(0, 4).toString('latin1') !== 'RIFF' || buf.subarray(8, 12).toString('latin1') !== 'WEBP') return false;
+    return buf.readUInt32LE(4) + 8 === buf.length;
+  }
+  return false; // a format the upstream does not accept must stay text, never a 502
+}
 function extractToolOutput(item) {
   const images = [];
   const rawOut = item ? item.output : '';
   if (rawOut === undefined || rawOut === null) return { text: '', images };
   let text = typeof rawOut === 'string' ? rawOut : (() => { try { return JSON.stringify(rawOut); } catch (e) { return String(rawOut); } })();
   const found = text.match(DATA_URL_RE) || [];
-  for (const u of found) if (u.length > 1024 && !images.includes(u)) images.push(u);
-  text = text.replace(DATA_URL_RE, '[image data removed: use the attached image]');
+  const attachable = new Set();
+  let skipped = 0;
+  for (const u of found) {
+    if (u.length <= 1024) continue;
+    if (isCompleteImageDataUrl(u)) attachable.add(u);
+    else skipped++;
+  }
+  for (const u of found) if (attachable.has(u) && !images.includes(u)) images.push(u);
+  if (skipped > 0) log('warn', 'Skipped an incomplete image in tool output', { skipped, checked: found.length });
+  if (attachable.size) text = text.replace(DATA_URL_RE, (u) => (attachable.has(u) ? '[image data removed: use the attached image]' : u));
   if (text.length > MAX_TOOL_OUTPUT_CHARS) {
     const removed = text.length - MAX_TOOL_OUTPUT_CHARS;
     log('warn', 'Tool output truncated', { originalChars: text.length, kept: MAX_TOOL_OUTPUT_CHARS, removed });

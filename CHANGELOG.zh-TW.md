@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-09-30
+
+### 修正
+
+- **工具輸出裡被截斷的圖片，不會再毒死整個請求。** 反代會把工具輸出裡超長的 `data:image/...;base64`
+  抽出來改用圖片重送（比文字 token 便宜太多）——但當 App 剛好把工具輸出切在 base64 中間時，那張「半張圖」
+  會被送到上游，Command Code 回 `502 unsupported image`，客戶端就變成無止境的重連循環。現在抽出來的圖片
+  會先驗證（PNG 必須有 `IEND`、JPEG 必須有 `FFD9`、GIF 必須有結尾、WebP 必須符合 RIFF 長度，而且格式
+  必須是上游接受的），不完整的一律留在文字裡、不當圖片附上；發生時會記一筆
+  `Skipped an incomplete image in tool output`。
+
 ## [1.1.1] - 2026-09-20
 
 ### 修正

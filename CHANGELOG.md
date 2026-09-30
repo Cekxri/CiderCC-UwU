@@ -6,6 +6,19 @@ All the pours, in order. This project follows [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-09-30
+
+### Fixed
+
+- **A truncated image inside a tool output no longer poisons the whole request.** The relay lifts long
+  `data:image/...;base64` blobs out of tool outputs and re-sends them as real images (far cheaper than text
+  tokens) — but when the client had truncated the tool output mid-base64, the half image went upstream and
+  Command Code answered `502 unsupported image`, which the client surfaced as an endless reconnect loop.
+  Extracted images are now validated first (PNG must end with `IEND`, JPEG with `FFD9`, GIF with its trailer,
+  WebP must match its RIFF size, and the format must be one the upstream accepts); anything incomplete stays
+  as text instead of being attached, and `Skipped an incomplete image in tool output` records when that
+  happens.
+
 ## [1.1.1] - 2026-09-20
 
 ### Fixed
